@@ -69,19 +69,19 @@ if __name__ == "__main__":
             'Museum of History & Industry':'http://www.libraryinsight.net/mpCalendar.asp?t=9005982&jx=y9p&pInstitution=Museum%20of%20History%20%26amp%3B%20Industry&mps=2258'
             }
     
-    while True:
-        for meseum, url in meseums.items():
-            dates = get_available_dates(url)
+    #while True:
+    for meseum, url in meseums.items():
+        dates = get_available_dates(url)
+        
+        if len(dates) > 0:
+            print "%s" % time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())
             
-            if len(dates) > 0:
-                print "%s" % time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())
-                
-                print meseum
-                print url
-                print dates
-                print 
-                #send_result(meseum, url, dates)
-                
-                time.sleep(60)
+            print meseum
+            print url
+            print dates
+            print 
+            send_result(meseum, url, dates)
+            
+            #time.sleep(60)
             
         
