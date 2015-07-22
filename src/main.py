@@ -8,7 +8,7 @@ import sys
 import urllib
 import re
 import smtplib
-from email.mime.text import MIMEText
+from gmail import send_email
 
 import time
 
@@ -42,27 +42,20 @@ def get_available_dates(url):
 
 def send_result(meseum, url, dates):
     content = '%s\r\n%s\r\n%s' % (meseum, url, ', '.join(dates))
-    msg = MIMEText(content)
     
     # me == the sender's email address
     # you == the recipient's email address
     me = 'wencanluo.cn@gmail.com'
     you = 'wencanluo.cn@gmail.com'
     
-    msg['Subject'] = '%s' % url
-    msg['From'] = me
-    msg['To'] = you
+    subject = '%s is available now' % meseum
     
-    # Send the message via our own SMTP server, but don't include the
-    # envelope header.
-    s = smtplib.SMTP('localhost')
-    s.sendmail(me, [you], msg.as_string())
-    s.quit()
-
+    send_email(subject, me, [you], content)
+    
     
 if __name__ == "__main__":
     meseums = {
-            #'Henry Art Gallery':'http://www.libraryinsight.net/mpCalendar.asp?t=2825676&jx=y9p&pInstitution=Henry%20Art%20Gallery&mps=1927',
+            'Henry Art Gallery':'http://www.libraryinsight.net/mpCalendar.asp?t=2825676&jx=y9p&pInstitution=Henry%20Art%20Gallery&mps=1927',
             'EMP Museum':'http://www.libraryinsight.net/mpCalendar.asp?t=1186290&jx=y9p&pInstitution=EMP%20Museum&mps=1925',
             'Museum of Flight':'http://www.libraryinsight.net/mpCalendar.asp?t=2494794&jx=y9p&pInstitution=Museum%20of%20Flight&mps=2259',
             'Seattle Aquarium':'http://www.libraryinsight.net/mpCalendar.asp?t=2644944&jx=y9p&pInstitution=Seattle%20Aquarium&mps=2160',

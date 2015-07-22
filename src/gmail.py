@@ -10,6 +10,11 @@ SMTP_PASSWORD = "mypassword"
 DATE_FORMAT = "%d/%m/%Y"
 EMAIL_SPACE = ", "
 
+import ConfigParser
+config = ConfigParser.RawConfigParser()
+config.read('default.cfg')
+SMTP_PASSWORD = config.get('gmail', 'password')
+    
 def send_email(subject, email_from, email_to, content):
     '''
     email_to is a list of email address
@@ -26,11 +31,6 @@ def send_email(subject, email_from, email_to, content):
     mail.quit()
 
 if __name__=='__main__':
-    import ConfigParser
-    config = ConfigParser.RawConfigParser()
-    config.read('default.cfg')
-    SMTP_PASSWORD = config.get('gmail', 'password')
-    
     subject = "Demo"
     email_from = SMTP_USERNAME
     email_to = [SMTP_USERNAME]
