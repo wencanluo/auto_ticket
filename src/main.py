@@ -9,6 +9,7 @@ import urllib
 import re
 import smtplib
 from gmail import send_email
+import sys
 
 import time
 
@@ -55,26 +56,27 @@ def send_result(meseum, url, dates):
     
 if __name__ == "__main__":
     meseums = {
-            'Henry Art Gallery':'http://www.libraryinsight.net/mpCalendar.asp?t=2825676&jx=y9p&pInstitution=Henry%20Art%20Gallery&mps=1927',
+            #'Henry Art Gallery':'http://www.libraryinsight.net/mpCalendar.asp?t=2825676&jx=y9p&pInstitution=Henry%20Art%20Gallery&mps=1927',
             'EMP Museum':'http://www.libraryinsight.net/mpCalendar.asp?t=1186290&jx=y9p&pInstitution=EMP%20Museum&mps=1925',
             'Museum of Flight':'http://www.libraryinsight.net/mpCalendar.asp?t=2494794&jx=y9p&pInstitution=Museum%20of%20Flight&mps=2259',
             'Seattle Aquarium':'http://www.libraryinsight.net/mpCalendar.asp?t=2644944&jx=y9p&pInstitution=Seattle%20Aquarium&mps=2160',
             'Museum of History & Industry':'http://www.libraryinsight.net/mpCalendar.asp?t=9005982&jx=y9p&pInstitution=Museum%20of%20History%20%26amp%3B%20Industry&mps=2258'
             }
     
-    #while True:
-    for meseum, url in meseums.items():
-        dates = get_available_dates(url)
+    while True:
+        for meseum, url in meseums.items():
+            dates = get_available_dates(url)
+            
+            if len(dates) > 0:
+                print "%s" % time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())
+                
+                print meseum
+                print url
+                print dates
+                print 
+                send_result(meseum, url, dates)
         
-        if len(dates) > 0:
-            print "%s" % time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())
-            
-            print meseum
-            print url
-            print dates
-            print 
-            send_result(meseum, url, dates)
-            
-            #time.sleep(60)
-            
+        print "%s job will start 1 mins later" % time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())   
+        sys.stdout.flush()
         
+        time.sleep(60)
