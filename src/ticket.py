@@ -23,8 +23,6 @@ def buy_ticket(url):#work version
     for tag in tags:
         if tag.get('name') == None: continue
         
-        print tag.get('name'), tag.get('value')
-        
         data[tag.get('name')] = tag.get('value')
     
     
@@ -34,7 +32,7 @@ def buy_ticket(url):#work version
     post_url = 'http://www.libraryinsight.net/mpPostCheckOut.asp?jx=y9p'
     r = requests.post(post_url, data=data)
     
-    if r.text.find('Email and Phone Saved') != -1:
+    if r.text.find('Print out the pass by clicking the button blow') != -1:
         return True
     
     #failed, use the second card
@@ -44,8 +42,7 @@ def buy_ticket(url):#work version
     post_url = 'http://www.libraryinsight.net/mpPostCheckOut.asp?jx=y9p'
     r = requests.post(post_url, data=data)
     
-    print r.text
-    if r.text.find('Email and Phone Saved') != -1:
+    if r.text.find('Print out the pass by clicking the button blow') != -1:
         return True
     
     return False
@@ -53,5 +50,7 @@ def buy_ticket(url):#work version
     
 if __name__ == "__main__":
     url = 'http://www.libraryinsight.net/mpSignUp.asp?t=1173441&jx=y9p&mps=1927&cFocus=title&pInstitution=Henry Art Gallery&etad=7/31/2015&pc=5645'
-    buy_ticket(url)
+    #url = 'http://www.libraryinsight.net/mpSignUp.asp?t=1167939&jx=y9p&mps=1927&cFocus=title&pInstitution=Henry%20Art%20Gallery&etad=8/2/2015&pc=5136'
+    success = buy_ticket(url)
+    print success
     
