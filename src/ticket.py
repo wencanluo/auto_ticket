@@ -9,9 +9,6 @@ library_card_password1 = config.get('library', 'password1')
 library_card_number2 = config.get('library', 'library2')
 library_card_password2 = config.get('library', 'password2')
 
-print library_card_number2, type(library_card_number2)
-print library_card_password2, type(library_card_password2)
-
 def buy_ticket(url):#work version
     import requests
     from bs4 import BeautifulSoup
@@ -47,6 +44,7 @@ def buy_ticket(url):#work version
     post_url = 'http://www.libraryinsight.net/mpPostCheckOut.asp?jx=y9p'
     r = requests.post(post_url, data=data)
     
+    print r.text
     if r.text.find('Email and Phone Saved') != -1:
         return True
     
