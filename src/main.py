@@ -1,7 +1,6 @@
 import json
 import urllib
 import os
-import urllib2
 import io
 import gzip
 import sys
@@ -17,17 +16,14 @@ from ticket import buy_ticket
 from bs4 import BeautifulSoup
 from StringIO import StringIO
 
-def getPage(url):
-    response = urllib2.urlopen(url)
-    data = response.read()
-    return data
-    
+import util
+
 def get_available_dates(url):
     dates = []
     hrefs = []
     
     try:
-        html = getPage(url)
+        html = util.getPage(url)
         soup = BeautifulSoup(html, 'html.parser')
         
         for link in soup.find_all('a'):
@@ -54,6 +50,7 @@ def send_result(meseum, url, dates, hrefs):
     
     for herf in hrefs:
         href = 'http://www.libraryinsight.net/' + herf
+        
         if buy_ticket(href):
             subject = '%s is revserved now' % meseum
             send_email(subject, me, [you], content)
@@ -68,21 +65,26 @@ def send_result(meseum, url, dates, hrefs):
 if __name__ == "__main__":
     meseums = {
             #'Henry Art Gallery':'http://www.libraryinsight.net/mpCalendar.asp?t=2825676&jx=y9p&pInstitution=Henry%20Art%20Gallery&mps=1927',
-            #'1_EMP Museum':'http://www.libraryinsight.net/mpCalendar.asp?t=1186290&jx=y9p&pInstitution=EMP%20Museum&mps=1925',
-            '2_Seattle Aquarium':'http://www.libraryinsight.net/mpCalendar.asp?t=2644944&jx=y9p&pInstitution=Seattle%20Aquarium&mps=2160',
             '3_Museum of History & Industry':'http://www.libraryinsight.net/mpCalendar.asp?t=9005982&jx=y9p&pInstitution=Museum%20of%20History%20%26amp%3B%20Industry&mps=2258',
             '4_Museum of Flight':'http://www.libraryinsight.net/mpCalendar.asp?t=2494794&jx=y9p&pInstitution=Museum%20of%20Flight&mps=2259',
+            '5_Burke Museum': 'http://www.libraryinsight.net/mpCalendar.asp?t=1613178&jx=y9p&pInstitution=Burke%20Museum&mps=1926',
+            #'1_EMP Museum':'http://www.libraryinsight.net/mpCalendar.asp?t=1186290&jx=y9p&pInstitution=EMP%20Museum&mps=1925',
+            #'2_Seattle Aquarium':'http://www.libraryinsight.net/mpCalendar.asp?t=2644944&jx=y9p&pInstitution=Seattle%20Aquarium&mps=2160',
+            #'Wing Luke Museum': 'http://www.libraryinsight.net/mpCalendar.asp?t=2539302&jx=y9p&pInstitution=Wing%20Luke%20Museum&mps=1905',
+            #'Living Computer Museum': 'http://www.libraryinsight.net/mpCalendar.asp?t=4650414&jx=y9p&pInstitution=Living%20Computer%20Museum&mps=2295',
+            #'Center for Wooden Boats': 'http://www.libraryinsight.net/mpCalendar.asp?t=4780662&jx=y9p&pInstitution=Center%20for%20Wooden%20Boats&mps=1906',
             }
     
     success = False
     
     dt = 1
     
-    for meseum, url in meseums.items():
+    for meseum in sorted(meseums):
         print meseum
         
     while True:
-        for meseum, url in meseums.items():
+        for meseum in sorted(meseums):
+            url = meseums[meseum]
             dates, hrefs = get_available_dates(url)
             
             if len(dates) > 0:

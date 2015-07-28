@@ -4,7 +4,6 @@ from datetime import date
 
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
-SMTP_USERNAME = "wencanluo.cn@gmail.com"
 SMTP_PASSWORD = "mypassword"
 
 DATE_FORMAT = "%d/%m/%Y"
@@ -12,8 +11,9 @@ EMAIL_SPACE = ", "
 
 import ConfigParser
 config = ConfigParser.RawConfigParser()
-config.read('default.cfg')
-SMTP_PASSWORD = config.get('gmail', 'password')
+config.read('../config/default.cfg')
+SMTP_USERNAME = config.get('Company', 'email')
+SMTP_PASSWORD = config.get('Company', 'email_password')
     
 def send_email(subject, email_from, email_to, content):
     '''
