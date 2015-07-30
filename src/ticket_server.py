@@ -26,20 +26,15 @@ class TicketServer:
         register(app_id, api_key)
         
         self.updated_museums = {}
+        self.museums = None
     
     def get_data_top(self, table, topK, cid=None, order_by = None):
         data = {'results':[]}
 
-        if cid == None:
-            if order_by != None:
-                rows = table.Query.all().order_by(order_by)
-            else:
-                rows = table.Query.all()
+        if order_by != None:
+            rows = table.Query.all().order_by(order_by)
         else:
-            if order_by != None:
-                rows = table.Query.filter(cid=cid).order_by(order_by)
-            else:
-                rows = table.Query.filter(cid=cid)
+            rows = table.Query.all()
         
         assert(topK <= 100)
         page = rows.limit(topK)
@@ -54,19 +49,37 @@ class TicketServer:
                
         return data
     
-    def get_data(self, table, cid=None, order_by = None):
+    
+    def get_data_objects(self, table, order_by = None):
+        objects = []
+
+        if order_by != None:
+            rows = table.Query.all().order_by(order_by)
+        else:
+            rows = table.Query.all()
+        
+        totalN = 0
+        N = 100
+        page = rows.limit(N)
+        while(True):
+            for row in page:
+                objects.append(row)
+            
+            totalN += N
+            page = rows.skip(totalN).limit(N)
+            
+            if len(page) == 0:
+                break
+            
+        return objects
+        
+    def get_data(self, table, order_by = None):
         data = {'results':[]}
 
-        if cid == None:
-            if order_by != None:
-                rows = table.Query.all().order_by(order_by)
-            else:
-                rows = table.Query.all()
+        if order_by != None:
+            rows = table.Query.all().order_by(order_by)
         else:
-            if order_by != None:
-                rows = table.Query.filter(cid=cid).order_by(order_by)
-            else:
-                rows = table.Query.filter(cid=cid)
+            rows = table.Query.all()
         
         totalN = 0
         N = 100
@@ -88,8 +101,15 @@ class TicketServer:
             
         return data
 
-    def get_museums(self, cid=None):
-        return self.get_data(Lecture, cid)
+    def get_museums(self):
+        if self.museums != None: return self.museums
+        
+        try:
+            self.museums = self.get_data_objects(Museum)
+            return self.museums
+        except Exception as e:
+            print e
+            return []
     
     def get_root_url(self, url):
         k = url.rfind('/')
@@ -130,9 +150,50 @@ class TicketServer:
         
         return dates, hrefs
     
-    def update_museum_info(self, museum_list_url):
+    
+    def update_museum_info(self):
         '''
-        extract the museum info from the url
+        only update the museum info in the database
+        '''
+        
+        success = True
+        
+        #get the list of museums
+        for museum in self.get_museums():
+            name = museum.name
+            if name in self.updated_museums: continue
+            
+            success = False
+            
+            ticket_url = museum.ticket_url
+            
+            dates, hrefs = self.get_available_dates(ticket_url)
+            
+            for date, href in zip(dates, hrefs):
+                reserve_url = self.get_root_url(museum_list_url) + href
+                data = self.get_measume_slots(reserve_url)
+                
+                museum.DonatedBy = data['DonatedBy']
+                museum.iAddress = data['iAddress']
+                museum.mdescription = data['mdescription']
+                museum.mgraphic = data['mgraphic']
+                museum.MuseumID = data['MuseumID']
+                museum.iState = data['iState']
+                museum.iTitle = data['iTitle']
+                museum.iCity = data['iCity']
+                museum.Institution = data['Institution']
+                museum.PassID = data['PassID']
+                
+                self.updated_museums[name] = True
+                museum.save()
+                
+                print "%s %s is updated, passid = %s" % (time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()), name, data['PassID'])
+                break
+        return success 
+        
+    def update_museum_info_full(self, museum_list_url):
+        '''
+        extract the museum info from the orginal url
         '''
         response = requests.get(museum_list_url, verify=False)
         page = BeautifulSoup(response.text, 'html.parser')
@@ -188,8 +249,8 @@ class TicketServer:
                     print "%s is updated, passid = %s" % (name, data['PassID'])
                     break
      
-        head = ['name', 'ticket_url', 'date'] + head + ['reserve_url']
-        file_util.write_matrix('../data/museum %s.txt' % (datetime.date.today().strftime(DATE_FORMAT_FILE)) , body, head)
+        #head = ['name', 'ticket_url', 'date'] + head + ['reserve_url']
+        #file_util.write_matrix('../data/museum %s.txt' % (datetime.date.today().strftime(DATE_FORMAT_FILE)) , body, head)
     
     def test(self):
         pass
@@ -211,9 +272,12 @@ if __name__ == '__main__':
     
     dt = 1
     while True:
-        server.update_museum_info(museum_list_url)
+        if server.update_museum_info():
+            print 'All museums\' info are update to date'
+            break
+        
+        #print "%s job will start %.2f mins later" % (time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()), dt/60.)
         time.sleep(dt)
-        break
     
     #server.test()
     #course_mirror_server.run(cid)
