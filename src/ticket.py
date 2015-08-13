@@ -34,12 +34,9 @@ if __name__ == "__main__":
     #results = server.get_available_dates(dates_url)
     #for date, reserve_url in results.items():
     #    print date, reserve_url
+    
     #server.update_museum_info_full()
-    #server.schedule_update_passid()
-    
-    dates_url = 'http://www.libraryinsight.net/mpCalendar.asp?t=4553106&jx=y9p&pInstitution=Nordic%20Heritage%20Museum&mps=1929'
-    results = server.get_available_dates(dates_url)
-    
+    server.schedule_update_passid(dt=60*5)
     
     #results = server.buy_ticket(url, library_cards.items())
     

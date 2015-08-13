@@ -5,6 +5,7 @@ import datetime
 import time
 from tables import *
 import json
+import codecs
 import os
 import cmd
 from cmd import Cmd
@@ -18,6 +19,11 @@ from parse_rest.user import User
 import util
 import file_util
 import dateutil.parser
+
+from datetime import datetime
+from pytz import timezone
+
+pacific_zone = timezone('US/Pacific')
 
 DATE_FORMAT = "%m/%d/%Y"
 DATE_FORMAT_AVAILABLE = "%B %m, %Y"
@@ -38,7 +44,32 @@ class TicketServer:
         self.museums = None
         self.post_url = 'http://www.libraryinsight.net/mpPostCheckOut.asp?jx=y9p'
         self.museum_list_url = 'http://www.libraryinsight.net/mpbymuseum.asp?jx=y9'
+        self.tables = {'Museum':Museum, 
+                        'PassID':PassID
+                    }
+        self.datadir = '../data/'
+        self.passid_local = 'PassID_local.json'
     
+    def download_databases(self):
+        for table_name, table in self.tables.items():
+            data = self.get_data(table)
+            
+            filename = os.path.join(self.datadir, table_name + '.json')
+            
+            with codecs.open(filename, 'w', 'utf-8') as fout:
+                json.dump(data, fout, indent=2)
+    
+    def upload_databases(self):
+        for table_name, table in self.tables.items():
+            filename = os.path.join(self.datadir, table_name + '.json')
+            with codecs.open(filename, 'r', 'utf-8') as fin:
+                data = json.load(fin)
+            
+            for item in data['results']:
+                if 'objectId' in item: continue
+                
+                #TODO
+                
     def get_data_top(self, table, topK, cid=None, order_by = None):
         data = {'results':[]}
 
@@ -163,6 +194,74 @@ class TicketServer:
         return results
     
     def update_museum_passID(self):
+        '''
+        only update the museum passid in the database
+        '''
+        #load cache
+        filename = os.path.join(self.datadir, self.passid_local)
+        if file_util.is_exist(filename):
+            with codecs.open(filename, 'r', 'utf-8') as fin:
+                cache = json.load(fin)
+        else:
+            cache = {}
+        
+        while True:
+            changed = False
+            
+            #get the list of museums
+            for museum in self.get_museums():
+                museum_id = museum.MuseumID
+                
+                ticket_url = museum.ticket_url
+                
+                results = self.get_available_dates(ticket_url)
+                
+                if len(results) > 0:
+                    print museum.name
+                    
+                for date, href in results.items():
+                    p = href.rfind('=')
+                    passid = href[p+1:]
+                    
+                    key = '@'.join([museum_id, date, passid])
+                    if key in cache: continue
+                    
+                    cache[key] = False
+                    changed = True
+                    
+            if not changed: break
+    
+        #save the cache
+        with codecs.open(filename, 'w', 'utf-8') as fout:
+            json.dump(cache, fout, indent=2)
+    
+    def upload_museum_passID(self):
+        filename = os.path.join(self.datadir, self.passid_local)
+        if file_util.is_exist(filename):
+            with codecs.open(filename, 'r', 'utf-8') as fin:
+                cache = json.load(fin)
+        else:
+            cache = {}
+        
+        count = 0
+        for info in cache:
+            if cache[info]: continue #already uploaded
+            
+            museum_id, date, passid = info.split('@')
+            query = PassID.Query.filter(PassID=passid, MuseumID=museum_id, Date=date)
+            if len(query) == 0:
+                m_PassId = PassID(PassID=passid, MuseumID=museum_id, Date=date)
+                m_PassId.save()
+                count += 1
+            cache[info] = True
+            
+        print "%d passID is updated" % count
+                
+        #save the cache
+        with codecs.open(filename, 'w', 'utf-8') as fout:
+            json.dump(cache, fout, indent=2)
+        
+    def update_museum_passID_remote(self):
         '''
         only update the museum passid in the database
         '''
@@ -348,6 +447,15 @@ class TicketServer:
     def test(self):
         pass
     
+    def ticket_time_from_now_in_seconds(self):
+        '''
+        get the ticket time from now in seconds
+        '''
+        t = datetime.now(pacific_zone)
+        ticket_time = datetime(t.year, t.month, t.day, hour=21, minute=0, second=0, microsecond=0, tzinfo=t.tzinfo)
+        dt = ticket_time - t
+        return dt.seconds
+        
     def schedule_update_passid(self, dt=60):
         while True:
             try:
@@ -355,7 +463,13 @@ class TicketServer:
             except Exception as e:
                 print e
             
+            if self.ticket_time_from_now_in_seconds <= dt: continue #if there is enough time, sleep
+            
             print "%s job will start %.2f mins later" % (time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()), dt/60.)
+            
+            if dt >= 5*60:
+                self.upload_museum_passID()
+            
             time.sleep(dt)
     
     def schedule_update_museum_info(self, dt=3600):
@@ -366,7 +480,17 @@ class TicketServer:
             
             #print "%s job will start %.2f mins later" % (time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()), dt/60.)
             time.sleep(dt)
+    
+    def profile_function(self):
+        dates_url = 'http://www.libraryinsight.net/mpCalendar.asp?t=4553106&jx=y9p&pInstitution=Nordic%20Heritage%20Museum&mps=1929'
         
+        time_start = time.clock()
+        results = server.get_available_dates(dates_url)
+        time_end = time.clock()
+        
+        print "decoding time: %s" % (time_end - time_start)
+    
+
 if __name__ == '__main__':
     
     import ConfigParser
@@ -379,6 +503,12 @@ if __name__ == '__main__':
                                         config.get('Parse', 'PARSE_MASTER_KEY')
                                         )
     
+    #server.profile_function()
     
-    server.update_museum_info_full()
+    print server.check_time()
+    
+    
+    
+    
+    
     
