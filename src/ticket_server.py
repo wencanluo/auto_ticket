@@ -146,7 +146,7 @@ class TicketServer:
         if self.museums != None: return self.museums
         
         try:
-            self.museums = self.get_data_objects(Museum)
+            self.museums = self.get_data_objects(Museum, order_by = 'priority')
             return self.museums
         except Exception as e:
             print e
@@ -505,7 +505,9 @@ if __name__ == '__main__':
     
     #server.profile_function()
     
-    print server.check_time()
+    for museum in server.get_museums():
+        print museum.name
+        
     
     
     
