@@ -1,4 +1,4 @@
-from splinter import Browser
+from ticket_server import TicketServer
 
 import ConfigParser
 config = ConfigParser.RawConfigParser()
@@ -17,59 +17,33 @@ library_cards = {library_card_number1:library_card_password1,
                 library_card_number3:library_card_password3,
     }
 
-def check_result(html):
-    ret = -1
-    
-    if html.find('Print out the pass by clicking the button blow') != -1: #succeed
-        ret = 1
-        
-    if html.find('You have reached the max # of reservations') != -1: #failed
-        ret = 2
-    
-    return ret
-    
-def buy_ticket(url):#work version
-    import requests
-    from bs4 import BeautifulSoup
-    
-    response = requests.get(url, verify=False)
-    page = BeautifulSoup(response.text, 'html.parser')
-    
-    tags = page.find_all('input')
-    
-    data = {}
-    
-    for tag in tags:
-        if tag.get('name') == None: continue
-        data[tag.get('name')] = tag.get('value')
-    
-    print data['PassID']
-    
-    for card, password in library_cards.items():
-        print card, password
-        
-        data['iTitle'] = card
-        data['Password'] = password
-        #data['PassID'] = "4827"
-        
-        post_url = 'http://www.libraryinsight.net/mpPostCheckOut.asp?jx=y9p'
-        r = requests.post(post_url, data=data)
-        
-        ret = check_result(r.text)
-        
-        print ret
-        if ret == -1: 
-            print r.text
-            
-        if  ret == 1: #success
-            return True
-    
-    return False
-    
-    
 if __name__ == "__main__":
-    url = 'http://www.libraryinsight.net/mpSignUp.asp?t=1168245&jx=y9p&mps=1927&cFocus=title&pInstitution=Henry%20Art%20Gallery&etad=8/6/2015&pc=5645'
+    #url = 'http://www.libraryinsight.net/mpSignUp.asp?t=1173435&jx=y9p&mps=1927&cFocus=title&pInstitution=Henry%20Art%20Gallery&etad=9/10/2015&pc=4827'
+    dates_url = 'http://www.libraryinsight.net/mpCalendar.asp?t=2825676&jx=y9p&pInstitution=Henry%20Art%20Gallery&mps=1927'
     
-    success = buy_ticket(url)
-    print success
+    import ConfigParser
+    
+    config = ConfigParser.RawConfigParser()
+    config.read('../config/default.cfg')
+
+    server = TicketServer(config.get('Parse', 'PARSE_APP_ID'), 
+                                        config.get('Parse', 'PARSE_REST_API_KEY'), 
+                                        config.get('Parse', 'PARSE_MASTER_KEY')
+                                        )
+        
+    #results = server.get_available_dates(dates_url)
+    #for date, reserve_url in results.items():
+    #    print date, reserve_url
+    #server.update_museum_info_full()
+    #server.schedule_update_passid()
+    
+    dates_url = 'http://www.libraryinsight.net/mpCalendar.asp?t=4553106&jx=y9p&pInstitution=Nordic%20Heritage%20Museum&mps=1929'
+    results = server.get_available_dates(dates_url)
+    
+    
+    #results = server.buy_ticket(url, library_cards.items())
+    
+    #for card, ret in results.items():
+    #    print card, ret
+    
     

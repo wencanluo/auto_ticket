@@ -18,28 +18,6 @@ from StringIO import StringIO
 
 import util
 
-def get_available_dates(url):
-    dates = []
-    hrefs = []
-    
-    try:
-        html = util.getPage(url)
-        soup = BeautifulSoup(html, 'html.parser')
-        
-        for link in soup.find_all('a'):
-            href = link.get('href')
-            
-            if href != None:
-                if href.startswith('mpSignUp.asp'):
-                    dates.append(link.get('title'))
-                    hrefs.append(href)
-            
-    except:
-        return dates, hrefs
-    
-    return dates, hrefs
-    
-
 def send_result(meseum, url, dates, hrefs):
     content = '%s\r\n%s\r\n%s' % (meseum, url, ', '.join(dates))
     

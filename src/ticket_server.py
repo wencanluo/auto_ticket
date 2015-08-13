@@ -17,9 +17,18 @@ from bs4 import BeautifulSoup
 from parse_rest.user import User
 import util
 import file_util
+import dateutil.parser
 
-DATE_FORMAT = "%d/%m/%Y"
+DATE_FORMAT = "%m/%d/%Y"
+DATE_FORMAT_AVAILABLE = "%B %m, %Y"
 DATE_FORMAT_FILE = "%d-%m-%Y"
+
+'''
+url:
+    reserve_url: a url that can buy a ticket directly
+    dates_url: a url that shows the available dates
+    museum_list_url: a url that list all the museums
+'''
 
 class TicketServer:
     def __init__(self, app_id, api_key, master_key):
@@ -27,6 +36,8 @@ class TicketServer:
         
         self.updated_museums = {}
         self.museums = None
+        self.post_url = 'http://www.libraryinsight.net/mpPostCheckOut.asp?jx=y9p'
+        self.museum_list_url = 'http://www.libraryinsight.net/mpbymuseum.asp?jx=y9'
     
     def get_data_top(self, table, topK, cid=None, order_by = None):
         data = {'results':[]}
@@ -48,7 +59,6 @@ class TicketServer:
         data['results'].append(dict)
                
         return data
-    
     
     def get_data_objects(self, table, order_by = None):
         objects = []
@@ -129,12 +139,11 @@ class TicketServer:
         
         return data
             
-    def get_available_dates(self, ticket_url):
-        dates = []
-        hrefs = []
+    def get_available_dates(self, dates_url):
+        results = {}
         
         try:
-            html = util.getPage(ticket_url)
+            html = util.getPage(dates_url)
             soup = BeautifulSoup(html, 'html.parser')
             
             for link in soup.find_all('a'):
@@ -142,14 +151,46 @@ class TicketServer:
                 
                 if href != None:
                     if href.startswith('mpSignUp.asp'):
-                        dates.append(link.get('title'))
-                        hrefs.append(href)
+                        date = link.get('title')
+                        parsed_date = dateutil.parser.parse(date)
+                        format_date = parsed_date.strftime(DATE_FORMAT)
+                        results[format_date] = href
                 
         except:
-            return dates, hrefs
+            print "exception"
+            return results
         
-        return dates, hrefs
+        return results
     
+    def update_museum_passID(self):
+        '''
+        only update the museum passid in the database
+        '''
+        while True:
+            changed = False
+            
+            #get the list of museums
+            for museum in self.get_museums():
+                museum_id = museum.MuseumID
+                
+                ticket_url = museum.ticket_url
+                
+                results = self.get_available_dates(ticket_url)
+                
+                if len(results) > 0:
+                    print museum.name
+                    
+                for date, href in results.items():
+                    p = href.rfind('=')
+                    passid = href[p+1:]
+                    
+                    query = PassID.Query.filter(PassID=passid, MuseumID=museum_id, Date=date)
+                    if len(query) == 0:
+                        m_PassId = PassID(PassID=passid, MuseumID=museum_id, Date=date)
+                        m_PassId.save()
+                        changed = True
+                        
+            if not changed: break
     
     def update_museum_info(self):
         '''
@@ -167,9 +208,9 @@ class TicketServer:
             
             ticket_url = museum.ticket_url
             
-            dates, hrefs = self.get_available_dates(ticket_url)
+            results = self.get_available_dates(ticket_url)
             
-            for date, href in zip(dates, hrefs):
+            for date, href in results.items():
                 reserve_url = self.get_root_url(museum_list_url) + href
                 data = self.get_measume_slots(reserve_url)
                 
@@ -189,12 +230,15 @@ class TicketServer:
                 
                 print "%s %s is updated, passid = %s" % (time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()), name, data['PassID'])
                 break
-        return success 
-        
-    def update_museum_info_full(self, museum_list_url):
+        return success
+    
+    def update_museum_info_full(self, museum_list_url = None):
         '''
         extract the museum info from the orginal url
         '''
+        if museum_list_url == None:
+            museum_list_url = self.museum_list_url
+            
         response = requests.get(museum_list_url, verify=False)
         page = BeautifulSoup(response.text, 'html.parser')
     
@@ -223,9 +267,9 @@ class TicketServer:
                     museum = museum_query[0]
                     museum.ticket_url = ticket_url
                 
-                dates, hrefs = self.get_available_dates(ticket_url)
+                results = self.get_available_dates(ticket_url)
                 
-                for date, href in zip(dates, hrefs):
+                for date, href in results.items():
                     reserve_url = self.get_root_url(museum_list_url) + href
                     data = self.get_measume_slots(reserve_url)
                     
@@ -243,18 +287,86 @@ class TicketServer:
                     museum.Institution = data['Institution']
                     museum.PassID = data['PassID']
                     
-                    self.updated_museums[name] = True
-                    museum.save()
-                    
-                    print "%s is updated, passid = %s" % (name, data['PassID'])
                     break
+                
+                self.updated_museums[name] = True
+                museum.save()
      
         #head = ['name', 'ticket_url', 'date'] + head + ['reserve_url']
         #file_util.write_matrix('../data/museum %s.txt' % (datetime.date.today().strftime(DATE_FORMAT_FILE)) , body, head)
     
+    def check_result(self, html):
+        ret = -1
+        
+        if html.find('Print out the pass by clicking the button blow') != -1: #succeed
+            ret = 1
+            
+        if html.find('You have reached the max # of reservations') != -1: #failed
+            ret = 2
+        
+        if html.find('the  Pass  you selected is not available') != -1: #failed
+            ret = 3
+        
+        return ret
+    
+    def buy_ticket(self, reserve_url, library_cards):#work version
+        results = {}
+        
+        response = requests.get(reserve_url, verify=False)
+        page = BeautifulSoup(response.text, 'html.parser')
+        
+        tags = page.find_all('input')
+        
+        data = {}
+        
+        for tag in tags:
+            if tag.get('name') == None: continue
+            data[tag.get('name')] = tag.get('value')
+        
+        print data['PassID']
+        
+        for card, password in library_cards:
+            data['iTitle'] = card
+            data['Password'] = password
+            
+            r = requests.post(self.post_url, data=data)
+            
+            ret = self.check_result(r.text)
+            
+            #if ret != 1: print r.text
+                
+            results[card] = ret
+            
+            if ret == 1: #update the PassID
+                passID = PassID(MuseumID=data['MuseumID'], Date=data['SignUpDate'])
+                passID.PassID = data['PassID']
+                passID.save()
+                
+        
+        return results
+        
     def test(self):
         pass
-
+    
+    def schedule_update_passid(self, dt=60):
+        while True:
+            try:
+                self.update_museum_passID()
+            except Exception as e:
+                print e
+            
+            print "%s job will start %.2f mins later" % (time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()), dt/60.)
+            time.sleep(dt)
+    
+    def schedule_update_museum_info(self, dt=3600):
+        while True:
+            if self.update_museum_info():
+                print 'All museums\' info are update to date'
+                break
+            
+            #print "%s job will start %.2f mins later" % (time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()), dt/60.)
+            time.sleep(dt)
+        
 if __name__ == '__main__':
     
     import ConfigParser
@@ -268,17 +380,5 @@ if __name__ == '__main__':
                                         )
     
     
-    museum_list_url = config.get('Library', 'museum_list_url')
+    server.update_museum_info_full()
     
-    dt = 1
-    while True:
-        if server.update_museum_info():
-            print 'All museums\' info are update to date'
-            break
-        
-        #print "%s job will start %.2f mins later" % (time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()), dt/60.)
-        time.sleep(dt)
-    
-    #server.test()
-    #course_mirror_server.run(cid)
-    #course_mirror_server.change_demo_user()
