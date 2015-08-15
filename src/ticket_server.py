@@ -60,6 +60,9 @@ class TicketServer:
                 json.dump(data, fout, indent=2)
     
     def upload_databases(self):
+        '''
+        TODO:
+        '''
         for table_name, table in self.tables.items():
             filename = os.path.join(self.datadir, table_name + '.json')
             with codecs.open(filename, 'r', 'utf-8') as fin:
@@ -454,7 +457,9 @@ class TicketServer:
         t = datetime.now(pacific_zone)
         ticket_time = datetime(t.year, t.month, t.day, hour=21, minute=0, second=0, microsecond=0, tzinfo=t.tzinfo)
         dt = ticket_time - t
-        return dt.seconds
+        
+        dt_seconds = dt.seconds if dt.seconds < 24*60*60 - dt.seconds else 24*60*60 - dt.seconds
+        return dt_seconds
         
     def schedule_update_passid(self, dt=60):
         while True:
@@ -463,8 +468,13 @@ class TicketServer:
             except Exception as e:
                 print e
             
-            if self.ticket_time_from_now_in_seconds <= dt: continue #if there is enough time, sleep
+            time_left_passed = self.ticket_time_from_now_in_seconds()
             
+            print "%d seconds for the ticket" % time_left_passed
+            
+            if time_left_passed <= 5*60: continue #with in the ticket window
+            
+            #if there is enough time, sleep
             print "%s job will start %.2f mins later" % (time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()), dt/60.)
             
             if dt >= 5*60:
@@ -490,7 +500,6 @@ class TicketServer:
         
         print "decoding time: %s" % (time_end - time_start)
     
-
 if __name__ == '__main__':
     
     import ConfigParser
@@ -505,10 +514,12 @@ if __name__ == '__main__':
     
     #server.profile_function()
     
-    for museum in server.get_museums():
-        print museum.name
+    #for museum in server.get_museums():
+    #    print museum.name
         
+    #server.download_databases()
     
+    print server.ticket_time_from_now_in_seconds()
     
     
     
