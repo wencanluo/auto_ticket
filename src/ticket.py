@@ -35,12 +35,14 @@ if __name__ == "__main__":
     #for date, reserve_url in results.items():
     #    print date, reserve_url
     
-    #server.update_museum_info_full()
-    server.schedule_update_passid(dt=60*5)
+    server.update_museum_info_full()
+    #server.schedule_update_passid(dt=3*60)
+    
+    server.schedule_function(server.update_museum_passID, dt=3*60)
+    
+    print "continue"
     
     #results = server.buy_ticket(url, library_cards.items())
     
     #for card, ret in results.items():
     #    print card, ret
-    
-    

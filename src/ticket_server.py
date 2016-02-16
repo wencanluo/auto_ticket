@@ -20,14 +20,7 @@ import util
 import file_util
 import dateutil.parser
 
-from datetime import datetime
-from pytz import timezone
-
-pacific_zone = timezone('US/Pacific')
-
-DATE_FORMAT = "%m/%d/%Y"
-DATE_FORMAT_AVAILABLE = "%B %m, %Y"
-DATE_FORMAT_FILE = "%d-%m-%Y"
+from global_parms import *
 
 '''
 url:
@@ -42,6 +35,8 @@ class TicketServer:
         
         self.updated_museums = {}
         self.museums = None
+        self.museum_ticketurls = None
+        
         self.post_url = 'http://www.libraryinsight.net/mpPostCheckOut.asp?jx=y9p'
         self.museum_list_url = 'http://www.libraryinsight.net/mpbymuseum.asp?jx=y9'
         self.tables = {'Museum':Museum, 
@@ -49,8 +44,14 @@ class TicketServer:
                     }
         self.datadir = '../data/'
         self.passid_local = 'PassID_local.json'
-    
+        self.pass_id_cache = None
+        self.pass_id_cache_filename = os.path.join(self.datadir, self.passid_local)
+        
     def download_databases(self):
+        '''
+        download the databases from Parse and save them in local
+        '''
+        
         for table_name, table in self.tables.items():
             data = self.get_data(table)
             
@@ -73,7 +74,10 @@ class TicketServer:
                 
                 #TODO
                 
-    def get_data_top(self, table, topK, cid=None, order_by = None):
+    def get_data_top(self, table, topK, order_by = None):
+        '''
+        The the topK rows in a table
+        '''
         data = {'results':[]}
 
         if order_by != None:
@@ -118,6 +122,9 @@ class TicketServer:
         return objects
         
     def get_data(self, table, order_by = None):
+        '''
+        return the json data for a table from Parse
+        '''
         data = {'results':[]}
 
         if order_by != None:
@@ -146,10 +153,20 @@ class TicketServer:
         return data
 
     def get_museums(self):
+        '''
+        get the museum infomation from Parse as objects
+        '''
         if self.museums != None: return self.museums
         
         try:
             self.museums = self.get_data_objects(Museum, order_by = 'priority')
+            
+            self.museum_ticketurls = {}
+            for museum in self.museums:
+                museum_id = museum.MuseumID
+                ticket_url = museum.ticket_url
+                self.museum_ticketurls[museum_id] = ticket_url
+            
             return self.museums
         except Exception as e:
             print e
@@ -196,17 +213,58 @@ class TicketServer:
         
         return results
     
+    def update_museum_passid_with_id(self, museum_id):
+        if self.museum_ticketurls == None:
+            self.get_museums()
+        
+        ticket_url = self.museum_ticketurls[museum_id]
+        
+        results = self.get_available_dates(ticket_url)
+        
+        changed = False
+        if len(results) > 0:
+            print museum_id
+            
+            for date, href in results.items():
+                p = href.rfind('=')
+                passid = href[p+1:]
+                
+                key = '@'.join([museum_id, date, passid])
+                
+                if self.pass_id_cache == None:
+                    self.load_museum_id_cache()
+                
+                if key in self.pass_id_cache: continue
+                
+                self.pass_id_cache[key] = False
+                changed = True
+        
+        return changed
+    
+    def load_museum_id_cache(self):
+        #load cache
+        if self.pass_id_cache != None:
+            return self.pass_id_cache
+        
+        if file_util.is_exist(self.pass_id_cache_filename):
+            with codecs.open(self.pass_id_cache_filename, 'r', 'utf-8') as fin:
+                pass_id_cache = json.load(fin)
+        else:
+            pass_id_cache = {}
+        self.pass_id_cache = pass_id_cache
+        
+        return self.pass_id_cache
+    
+    def save_museum_info_with_id(self):
+        #save the cache
+        with codecs.open(self.pass_id_cache_filename, 'w', 'utf-8') as fout:
+            json.dump(self.pass_id_cache, fout, indent=2)
+            
     def update_museum_passID(self):
         '''
         only update the museum passid in the database
         '''
-        #load cache
-        filename = os.path.join(self.datadir, self.passid_local)
-        if file_util.is_exist(filename):
-            with codecs.open(filename, 'r', 'utf-8') as fin:
-                cache = json.load(fin)
-        else:
-            cache = {}
+        self.load_museum_id_cache()
         
         while True:
             changed = False
@@ -215,28 +273,12 @@ class TicketServer:
             for museum in self.get_museums():
                 museum_id = museum.MuseumID
                 
-                ticket_url = museum.ticket_url
-                
-                results = self.get_available_dates(ticket_url)
-                
-                if len(results) > 0:
-                    print museum.name
-                    
-                for date, href in results.items():
-                    p = href.rfind('=')
-                    passid = href[p+1:]
-                    
-                    key = '@'.join([museum_id, date, passid])
-                    if key in cache: continue
-                    
-                    cache[key] = False
+                if self.update_museum_passid_with_id(museum_id):
                     changed = True
                     
             if not changed: break
-    
-        #save the cache
-        with codecs.open(filename, 'w', 'utf-8') as fout:
-            json.dump(cache, fout, indent=2)
+        
+        self.save_museum_info_with_id()
     
     def upload_museum_passID(self):
         filename = os.path.join(self.datadir, self.passid_local)
@@ -461,10 +503,14 @@ class TicketServer:
         dt_seconds = dt.seconds if dt.seconds < 24*60*60 - dt.seconds else 24*60*60 - dt.seconds
         return dt_seconds
         
-    def schedule_update_passid(self, dt=60):
+    def schedule_function(self, fun, dt, *args):
         while True:
             try:
-                self.update_museum_passID()
+                if len(args) == 0:
+                    fun()
+                else:
+                    fun(args[0])
+                    
             except Exception as e:
                 print e
             
@@ -477,10 +523,16 @@ class TicketServer:
             #if there is enough time, sleep
             print "%s job will start %.2f mins later" % (time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()), dt/60.)
             
-            if dt >= 5*60:
-                self.upload_museum_passID()
+            try:
+                if dt >= 60:
+                    self.upload_museum_passID()
+            except Exception as e:
+                print e
             
-            time.sleep(dt)
+            try:
+                time.sleep(dt)
+            except KeyboardInterrupt:
+                break
     
     def schedule_update_museum_info(self, dt=3600):
         while True:
@@ -520,8 +572,3 @@ if __name__ == '__main__':
     #server.download_databases()
     
     print server.ticket_time_from_now_in_seconds()
-    
-    
-    
-    
-    
